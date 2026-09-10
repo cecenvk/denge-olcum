@@ -257,7 +257,9 @@ function dinlemeyeBasla(h){
     h.ax.push(A?A.x:null); h.ay.push(A?A.y:null); h.az.push(A?A.z:null);
     h.lx.push(L?L.x:null); h.ly.push(L?L.y:null); h.lz.push(L?L.z:null);
     h.ra.push(R?R.alpha:null); h.rb.push(R?R.beta:null); h.rg.push(R?R.gamma:null);
-    if(h.interval==null && e.interval) h.interval = e.interval;
+    // iOS, interval'i standarda aykiri olarak SANIYE cinsinden bildiriyor (0.0167),
+    // Android ms veriyor (16.7). 1'den kucukse saniyedir, ms'ye cevir.
+    if(h.interval==null && e.interval) h.interval = e.interval<1 ? e.interval*1000 : e.interval;
   };
   window.addEventListener('devicemotion', handler);
 }
