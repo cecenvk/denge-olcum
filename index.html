@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Denge Ölçüm Kaydedici</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#131c2e; --panel2:#1a2540; --line:#28344d; --text:#e8eefc;
+    --muted:#93a3c4; --accent:#22d3ee; --accent2:#a78bfa;
+    --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:14px 14px calc(24px + env(safe-area-inset-bottom));max-width:560px;margin-inline:auto}
+  h1{font-size:19px;margin:0 0 2px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card.acc{border-color:#2b4d63}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px}
+  input,select{width:100%;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:11px;font-size:16px;font-family:inherit}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;
+    font-family:inherit;background:var(--accent);color:#03212b;margin-top:10px}
+  button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  button.danger{background:#3a1620;color:#fecaca;border:1px solid #63263a}
+  button.mor{background:var(--accent2);color:#1b1035}
+  button:disabled{opacity:.4}
+  .modlar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .mod{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:left}
+  .mod.sec2{border-color:var(--accent);background:#0e2b36}
+  .mod b{display:block;font-size:14px;margin-bottom:3px}
+  .mod span{font-size:11px;color:var(--muted);line-height:1.3;display:block}
+  .big{font-size:44px;font-weight:800;text-align:center;letter-spacing:-.02em}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv b{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .pill.ok{background:#0d3b2e;color:#6ee7b7} .pill.warn{background:#3d2f0c;color:#fcd34d}
+  .pill.bad{background:#3a1620;color:#fca5a5} .pill.n{background:#1e2b45;color:#9fb3d9}
+  canvas{width:100%;height:200px;background:var(--panel2);border-radius:12px;border:1px solid var(--line)}
+  .hide{display:none}
+  .note{font-size:12px;color:var(--muted);margin-top:10px}
+  .err{background:#3a1620;border:1px solid #63263a;color:#fecaca;padding:10px;border-radius:10px;font-size:13px;margin-top:10px}
+  .bat{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .bat:last-child{border-bottom:0}
+  .bat .d{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+  .bat.done .d{background:#0d3b2e;border-color:#34d399;color:#6ee7b7}
+  .bat.now .d{border-color:var(--accent);color:var(--accent)}
+  .bat .n{flex:1;font-size:13px}
+  .bat .v{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<h1>Denge Ölçüm Kaydedici</h1>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.0</p>
+
+<!-- ============ MOD ============ -->
+<div class="modlar">
+  <button class="mod sec2" id="modA" data-mod="arastirma">
+    <b>Araştırma</b><span>HUR ile eşzamanlı · senkron işareti · ham veri</span></button>
+  <button class="mod" id="modB" data-mod="bagimsiz">
+    <b>Bağımsız ölçüm</b><span>telefon tek başına · 4 koşulluk batarya · takip</span></button>
+</div>
+
+<!-- ============ 1. KİMLİK ============ -->
+<div class="card" id="cardSetup">
+  <h2 id="setupBaslik">Oturum</h2>
+  <div class="row">
+    <div><label id="lblKimlik">Katılımcı kodu</label><input id="katilimci" placeholder="K001" autocomplete="off"></div>
+    <div id="wrapOturum"><label>Oturum</label><select id="oturum"><option value="1">1. oturum</option><option value="2">2. oturum</option></select></div>
+  </div>
+  <div style="margin-top:10px"><label>Telefonun yerleşimi</label>
+    <select id="yerlesim">
+      <option value="bel_L3L5">Bel — L3–L5, kemer</option>
+      <option value="sternum">Sternum</option>
+      <option value="diger">Diğer</option>
+    </select>
+  </div>
+  <div style="margin-top:10px"><label>Not (isteğe bağlı)</label><input id="not" placeholder="ayakkabısız, sert zemin…" autocomplete="off"></div>
+  <button class="sec" id="btnSensor">Sensör iznini al ve 5 sn test et</button>
+  <div id="sensorSonuc"></div>
+</div>
+
+<!-- ============ 2A. ARAŞTIRMA: TEK DENEME ============ -->
+<div class="card hide" id="cardTest">
+  <h2>Deneme</h2>
+  <div class="row">
+    <div><label>Koşul</label><select id="kosul"></select></div>
+    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="30" inputmode="numeric"></div>
+  </div>
+  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>5 sn</b> atılır.</div>
+  <button id="btnBasla">Ölçüme başla</button>
+</div>
+
+<!-- ============ 2B. BAĞIMSIZ: BATARYA ============ -->
+<div class="card hide acc" id="cardBatarya">
+  <h2>Ölçüm bataryası <span class="muted" style="text-transform:none;letter-spacing:0">· mCTSIB düzeni</span></h2>
+  <div id="bataryaListe"></div>
+  <div class="row" style="margin-top:10px">
+    <div><label>Deneme / koşul</label><select id="batTekrar"><option value="1">1 deneme</option><option value="2">2 deneme</option><option value="3" selected>3 deneme</option></select></div>
+    <div><label>Süre (sn)</label><input id="batSure" type="number" min="10" max="180" value="30" inputmode="numeric"></div>
+  </div>
+  <button id="btnBatBasla">Sıradaki ölçümü yap</button>
+  <button class="sec" id="btnBatOzet">Bataryayı bitir ve özeti gör</button>
+  <p class="note">Sünger koşulları için standart denge süngeri (Airex vb.) kullanın. Sünger yoksa yalnızca ilk iki koşulu yapıp Romberg oranını alabilirsiniz.</p>
+</div>
+
+<!-- ============ 3. KAYIT ============ -->
+<div class="card hide" id="cardKayit">
+  <p class="sub" style="text-align:center;margin:0 0 4px" id="kayitKosul"></p>
+  <div class="big mono" id="sayac">3</div>
+  <p class="sub" style="text-align:center;margin:6px 0 12px" id="kayitDurum">Hazırlanın…</p>
+  <canvas id="cv"></canvas>
+  <div class="kv"><span>Örnek</span><b class="mono" id="liveN">0</b></div>
+  <div class="kv"><span>Anlık frekans</span><b class="mono" id="liveHz">–</b></div>
+  <button class="sec hide" id="btnMarker">⚑ Senkron işareti koy</button>
+  <button class="danger" id="btnIptal">Denemeyi iptal et</button>
+</div>
+
+<!-- ============ 4. SONUÇ ============ -->
+<div class="card hide" id="cardSonuc">
+  <h2>Deneme kalitesi</h2>
+  <div id="kalite"></div>
+  <h2 style="margin-top:16px" id="sonucBaslik">Sonuç</h2>
+  <div id="onizleme"></div>
+  <p class="note" id="sonucNot"></p>
+  <button id="btnKaydet">Kaydet</button>
+  <button class="danger" id="btnAt">Geçersiz say, atla</button>
+</div>
+
+<!-- ============ 5. BAĞIMSIZ: ÖZET ============ -->
+<div class="card hide acc" id="cardOzet">
+  <h2>Ölçüm özeti</h2>
+  <div id="ozetIcerik"></div>
+  <button class="sec" id="btnOzetKapat">Kapat</button>
+</div>
+
+<!-- ============ 6. KAYITLAR ============ -->
+<div class="card" id="cardKayitlar">
+  <h2>Bu cihazdaki kayıtlar</h2>
+  <div id="liste"><p class="muted" style="font-size:13px">Henüz kayıt yok.</p></div>
+  <button class="sec" id="btnCsv">Ham veriyi CSV indir</button>
+  <button class="sec" id="btnOzetCsv">Özet tabloyu CSV indir</button>
+  <button class="danger" id="btnSil">Tüm kayıtları sil</button>
+</div>
+
+<p class="note">Bu araç bir tıbbi tanı cihazı değildir. Basınç merkezi (COP) ölçmez; gövde ivmesi ve açısal hızı kaydeder.</p>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════════════
+   Denge Ölçüm Kaydedici v2 — iki modlu
+
+   MOD A · Araştırma      : HUR ile eşzamanlı kayıt. Senkron işareti,
+                            katılımcı/oturum/koşul/deneme yapısı.
+                            Ekrandaki değerler "ön izleme"dir; makale
+                            değerleri ham veriden Python hattıyla gelir.
+   MOD B · Bağımsız ölçüm : Telefon tek başına. mCTSIB düzeninde 4 koşulluk
+                            batarya, birimsiz oranlar (Romberg / yüzey /
+                            vestibüler) ve önceki ölçümle karşılaştırma.
+
+   HER İKİ MODDA DA HAM VERİ KAYDEDİLİR VE DIŞA AKTARILIR.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const $ = s => document.querySelector(s);
+const show = (el,v=true) => el.classList.toggle('hide', !v);
+
+/* ---------- koşul tanımları ---------- */
+const KOSULLAR = [
+  {k:'SZ-GA', ad:'Sert zemin · gözler AÇIK',      sure:30, batarya:true},
+  {k:'SZ-GK', ad:'Sert zemin · gözler KAPALI',    sure:30, batarya:true},
+  {k:'SU-GA', ad:'Sünger · gözler AÇIK',          sure:30, batarya:true},
+  {k:'SU-GK', ad:'Sünger · gözler KAPALI',        sure:30, batarya:true},
+  {k:'YT-GA', ad:'Yarı-tandem · gözler AÇIK  — HUR dışı',   sure:30, batarya:false},
+  {k:'YT-GK', ad:'Yarı-tandem · gözler KAPALI — HUR dışı',  sure:30, batarya:false},
+  {k:'TA-GA', ad:'Tek ayak · gözler AÇIK      — HUR dışı',  sure:25, batarya:false},
+  {k:'TA-GK', ad:'Tek ayak · gözler KAPALI    — HUR dışı',  sure:25, batarya:false},
+];
+const kosulAd = k => (KOSULLAR.find(x=>x.k===k)||{ad:k}).ad;
+
+// birimsiz oranlar — HUR SmartBalance'ın kompozit skorlarının karşılığı
+const ORANLAR = [
+  {ad:'Romberg oranı (görsel bağımlılık)', pay:'SZ-GK', payda:'SZ-GA'},
+  {ad:'Yüzey oranı (propriyoseptif)',      pay:'SU-GA', payda:'SZ-GA'},
+  {ad:'Vestibüler oran',                   pay:'SU-GK', payda:'SZ-GA'},
+];
+
+/* ---------- durum ---------- */
+let mod = 'arastirma';
+let buf = null, markerler = [], sonDeneme = null;
+let kayitAktif = false, wakeLock = null, audioCtx = null;
+let aktifKosul = null, bataryaDurum = [];
+
+/* ---------- IndexedDB ---------- */
+let db = null;
+function dbAc(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open('dengeOlcum', 1);
+    r.onupgradeneeded = e => {
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains('denemeler'))
+        d.createObjectStore('denemeler',{keyPath:'id',autoIncrement:true});
+    };
+    r.onsuccess = e => { db = e.target.result; res(db); };
+    r.onerror = () => rej(r.error);
+  });
+}
+function dbEkle(o){ return new Promise((res,rej)=>{
+  const rq = db.transaction('denemeler','readwrite').objectStore('denemeler').add(o);
+  rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+function dbHepsi(){ return new Promise((res,rej)=>{
+  const rq = db.transaction('denemeler','readonly').objectStore('denemeler').getAll();
+  rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+function dbTemizle(){ return new Promise((res,rej)=>{
+  const rq = db.transaction('denemeler','readwrite').objectStore('denemeler').clear();
+  rq.onsuccess=()=>res(); rq.onerror=()=>rej(rq.error); }); }
+
+/* ---------- ses ---------- */
+function bip(freq=880, ms=140){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.frequency.value=freq; o.type='sine';
+    g.gain.setValueAtTime(0.001,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25,audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+ms/1000);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+ms/1000+0.02);
+  }catch(e){}
+}
+
+/* ---------- sensör ---------- */
+let handler = null;
+function bosBuf(){ return {t:[],te:[],ax:[],ay:[],az:[],lx:[],ly:[],lz:[],ra:[],rb:[],rg:[],interval:null}; }
+function dinlemeyeBasla(h){
+  handler = e => {
+    const t=performance.now();
+    const A=e.accelerationIncludingGravity, L=e.acceleration, R=e.rotationRate;
+    h.t.push(t); h.te.push(e.timeStamp);
+    h.ax.push(A?A.x:null); h.ay.push(A?A.y:null); h.az.push(A?A.z:null);
+    h.lx.push(L?L.x:null); h.ly.push(L?L.y:null); h.lz.push(L?L.z:null);
+    h.ra.push(R?R.alpha:null); h.rb.push(R?R.beta:null); h.rg.push(R?R.gamma:null);
+    if(h.interval==null && e.interval) h.interval = e.interval;
+  };
+  window.addEventListener('devicemotion', handler);
+}
+function dinlemeyiBirak(){ if(handler) window.removeEventListener('devicemotion',handler); handler=null; }
+
+async function izinIste(){
+  const D = window.DeviceMotionEvent;
+  if(!D) return {ok:false, mesaj:'Bu cihazda/tarayıcıda DeviceMotion desteklenmiyor.'};
+  if(typeof D.requestPermission === 'function'){
+    try{
+      const r = await D.requestPermission();
+      if(r!=='granted') return {ok:false, mesaj:'Hareket sensörü izni verilmedi.'};
+    }catch(err){ return {ok:false, mesaj:'İzin isteği başarısız. Sayfa HTTPS üzerinden açılmalı.'}; }
+  }
+  return {ok:true};
+}
+
+/* ---------- kalite ---------- */
+function araliklar(t){ const d=[]; for(let i=1;i<t.length;i++) d.push(t[i]-t[i-1]); return d; }
+function medyan(a){ const b=[...a].sort((x,y)=>x-y), n=b.length;
+  return n? (n%2? b[(n-1)/2] : (b[n/2-1]+b[n/2])/2) : NaN; }
+function ortalama(a){ return a.length? a.reduce((s,v)=>s+v,0)/a.length : NaN; }
+function stdSapma(a){ const m=ortalama(a); return Math.sqrt(ortalama(a.map(v=>(v-m)**2))); }
+
+function kaliteHesapla(b){
+  const d=araliklar(b.t), med=medyan(d), ort=ortalama(d), sd=stdSapma(d);
+  const sure=(b.t[b.t.length-1]-b.t[0])/1000;
+  const bosluk=d.filter(v=>v>2*med).length;
+  return {n:b.t.length, sure, hz:1000/med, ortHz:1000/ort, medDt:med, sdDt:sd,
+    jitterYuzde:100*sd/med, bosluk, boslukYuzde:100*bosluk/Math.max(1,d.length),
+    enBuyukDt:d.length?Math.max(...d):NaN,
+    eksikJiro:b.ra.every(v=>v==null), eksikLin:b.lx.every(v=>v==null)};
+}
+
+/* ---------- sinyal işleme (Python hattıyla aynı algoritma) ---------- */
+function butter2(fc, fs, tip){
+  const w=Math.tan(Math.PI*fc/fs), w2=w*w, k=Math.SQRT2*w, n=1+k+w2;
+  if(tip==='lp') return {b:[w2/n, 2*w2/n, w2/n], a:[1,(2*(w2-1))/n,(1-k+w2)/n]};
+  return {b:[1/n,-2/n,1/n], a:[1,(2*(w2-1))/n,(1-k+w2)/n]};
+}
+function filtre(x,c){
+  const y=new Array(x.length).fill(0);
+  for(let i=0;i<x.length;i++){
+    const x1=i>0?x[i-1]:x[0], x2=i>1?x[i-2]:x[0];
+    const y1=i>0?y[i-1]:0, y2=i>1?y[i-2]:0;
+    y[i]=c.b[0]*x[i]+c.b[1]*x1+c.b[2]*x2-c.a[1]*y1-c.a[2]*y2;
+  }
+  return y;
+}
+function filtfilt(x,c){
+  // scipy.signal.filtfilt ile ayni kenar davranisi: tek (odd) uzatma, padlen = 3*max(len(a),len(b))
+  const pad = Math.min(3*Math.max(c.a.length, c.b.length), x.length-1);
+  const on=[], arka=[];
+  for(let i=pad;i>=1;i--) on.push(2*x[0]-x[i]);
+  for(let i=2;i<=pad+1;i++) arka.push(2*x[x.length-1]-x[x.length-i]);
+  const g = on.concat(x, arka);
+  const y = filtre(filtre(g,c).reverse(),c).reverse();
+  return y.slice(pad, pad+x.length);
+}
+
+function metrikHesapla(b){
+  const fs=100, t0=b.t[0], t1=b.t[b.t.length-1];
+  const N=Math.floor((t1-t0)/1000*fs);
+  if(N<100) return null;
+  const gx=[],gy=[],gz=[]; let j=0;
+  for(let i=0;i<N;i++){
+    const tt=t0+i*1000/fs;
+    while(j<b.t.length-2 && b.t[j+1]<tt) j++;
+    const f=(tt-b.t[j])/Math.max(1e-9,(b.t[j+1]-b.t[j]));
+    const ip=a=>(a[j]==null||a[j+1]==null)?0:a[j]+f*(a[j+1]-a[j]);
+    gx.push(ip(b.ax)); gy.push(ip(b.ay)); gz.push(ip(b.az));
+  }
+  const at=Math.min(5*fs, Math.floor(N/3));
+  const X=gx.slice(at), Y=gy.slice(at), Z=gz.slice(at);
+  if(X.length<200) return null;
+  const m=[ortalama(X),ortalama(Y),ortalama(Z)], mag=m.map(Math.abs);
+  const dikey=mag.indexOf(Math.max(...mag)), ad=['x','y','z'];
+  let apD,mlD,apA,mlA;
+  if(dikey===1){ apD=Z; mlD=X; apA='z'; mlA='x'; }
+  else if(dikey===2){ apD=Y; mlD=X; apA='y'; mlA='x'; }
+  else { apD=Z; mlD=Y; apA='z'; mlA='y'; }
+  const hp=butter2(0.15,fs,'hp'), lp=butter2(10,fs,'lp');
+  const ap=filtfilt(filtfilt(apD,hp),lp), ml=filtfilt(filtfilt(mlD,hp),lp);
+  const rms=a=>Math.sqrt(ortalama(a.map(v=>v*v)));
+  const bileske=ap.map((v,i)=>Math.hypot(v,ml[i]));
+  return {dikeyEksen:ad[dikey], apEksen:apA, mlEksen:mlA,
+    rmsAP:rms(ap), rmsML:rms(ml), ortBilesik:ortalama(bileske),
+    pencereSn:X.length/fs, yerçekimi:Math.hypot(m[0],m[1],m[2])};
+}
+
+/* ---------- çizim ---------- */
+const cv=$('#cv'); let ctx=null;
+function ciz(){
+  if(!ctx) ctx=cv.getContext('2d');
+  const w=cv.width=cv.clientWidth*devicePixelRatio, h=cv.height=cv.clientHeight*devicePixelRatio;
+  ctx.clearRect(0,0,w,h);
+  if(!buf || buf.t.length<10) return;
+  const n=buf.t.length, bas=Math.max(0,n-600), seg=[];
+  for(let i=bas;i<n;i++) seg.push(Math.hypot(buf.ax[i]||0, buf.ay[i]||0, buf.az[i]||0));
+  const m=ortalama(seg);
+  ctx.strokeStyle='rgba(148,163,184,.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2*devicePixelRatio; ctx.beginPath();
+  const olcek=h/2/0.6;
+  seg.forEach((v,i)=>{ const px=i/(seg.length-1)*w, py=h/2-(v-m)*olcek;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
+  ctx.stroke();
+}
+
+/* ---------- mod ---------- */
+function modAyarla(yeni){
+  mod = yeni;
+  $('#modA').classList.toggle('sec2', mod==='arastirma');
+  $('#modB').classList.toggle('sec2', mod==='bagimsiz');
+  const ar = mod==='arastirma';
+  $('#setupBaslik').textContent = ar? 'Oturum' : 'Hasta';
+  $('#lblKimlik').textContent   = ar? 'Katılımcı kodu' : 'Hasta kodu';
+  $('#katilimci').placeholder   = ar? 'K001' : 'H001';
+  show($('#wrapOturum'), ar);
+  show($('#btnMarker'), ar);
+  show($('#cardTest'), false); show($('#cardBatarya'), false);
+  show($('#cardSonuc'), false); show($('#cardOzet'), false);
+  bataryaCiz();
+  yenile();
+}
+document.querySelectorAll('.mod').forEach(b=>
+  b.addEventListener('click', ()=>modAyarla(b.dataset.mod)));
+
+/* koşul listesini doldur */
+KOSULLAR.forEach(k=>{
+  const o=document.createElement('option');
+  o.value=k.k; o.textContent=k.ad; o.dataset.sure=k.sure;
+  $('#kosul').appendChild(o);
+});
+$('#kosul').addEventListener('change', e=>{
+  $('#sure').value = e.target.selectedOptions[0].dataset.sure;
+  yenile();
+});
+
+/* ---------- batarya ---------- */
+async function bataryaCiz(){
+  if(mod!=='bagimsiz') return;
+  const hepsi = await dbHepsi();
+  const kat = $('#katilimci').value.trim();
+  const bugun = new Date().toISOString().slice(0,10);
+  const bat = KOSULLAR.filter(k=>k.batarya);
+  const hedef = +$('#batTekrar').value;
+  let sirada = null;
+  bataryaDurum = bat.map(k=>{
+    const d = hepsi.filter(x=>x.katilimci===kat && x.kosul===k.k && x.mod==='bagimsiz'
+                              && x.tarih.slice(0,10)===bugun);
+    const tam = d.length >= hedef;
+    if(!tam && sirada===null) sirada = k.k;
+    const ort = d.length? ortalama(d.map(x=>x.metrik? x.metrik.ortBilesik : NaN)) : NaN;
+    return {...k, sayi:d.length, tam, ort};
+  });
+  aktifKosul = sirada;
+  $('#bataryaListe').innerHTML = bataryaDurum.map(b=>`
+    <div class="bat ${b.tam?'done':(b.k===sirada?'now':'')}">
+      <div class="d">${b.tam?'✓':(b.k===sirada?'▸':'')}</div>
+      <div class="n">${b.ad}<br><span class="muted" style="font-size:11px">${b.sayi}/${hedef} deneme</span></div>
+      <div class="v">${isNaN(b.ort)?'':b.ort.toFixed(4)}</div>
+    </div>`).join('');
+  $('#btnBatBasla').disabled = !sirada;
+  $('#btnBatBasla').textContent = sirada
+    ? `Sıradaki: ${kosulAd(sirada)}`
+    : 'Batarya tamamlandı';
+}
+$('#batTekrar').addEventListener('change', bataryaCiz);
+
+/* ---------- sensör testi ---------- */
+$('#btnSensor').addEventListener('click', async ()=>{
+  const el=$('#sensorSonuc'); el.innerHTML='<p class="note">Test ediliyor…</p>';
+  const izin = await izinIste();
+  if(!izin.ok){ el.innerHTML=`<div class="err">${izin.mesaj}</div>`; return; }
+  const test=bosBuf(); dinlemeyeBasla(test);
+  await new Promise(r=>setTimeout(r,5000));
+  dinlemeyiBirak();
+  if(test.t.length<20){ el.innerHTML='<div class="err">Sensörden veri gelmedi.</div>'; return; }
+  const k=kaliteHesapla(test);
+  const hzS = k.hz>=90?'ok':(k.hz>=45?'warn':'bad');
+  const jtS = k.jitterYuzde<15?'ok':(k.jitterYuzde<35?'warn':'bad');
+  el.innerHTML = `
+    <div class="kv"><span>Gerçekleşen frekans</span><b class="mono ${hzS}">${k.hz.toFixed(1)} Hz</b></div>
+    <div class="kv"><span>Jitter (SD/medyan)</span><b class="mono ${jtS}">%${k.jitterYuzde.toFixed(1)}</b></div>
+    <div class="kv"><span>Tarayıcının bildirdiği aralık</span><b class="mono">${test.interval? test.interval.toFixed(1)+' ms':'–'}</b></div>
+    <div class="kv"><span>Jiroskop</span><b>${k.eksikJiro?'<span class="pill bad">yok</span>':'<span class="pill ok">var</span>'}</b></div>
+    <div class="kv"><span>Yerçekimsiz ivme</span><b>${k.eksikLin?'<span class="pill warn">yok</span>':'<span class="pill ok">var</span>'}</b></div>
+    <p class="note">Frekans 45 Hz altındaysa ya da jitter %35'i aşıyorsa başka tarayıcı/cihaz deneyin.</p>`;
+  show($('#cardTest'), mod==='arastirma');
+  show($('#cardBatarya'), mod==='bagimsiz');
+  await bataryaCiz(); await yenile();
+});
+
+/* ---------- ölçüm ---------- */
+async function olcumBaslat(kosulKodu, sureSn){
+  if(!$('#katilimci').value.trim()){ alert('Kod alanı boş olamaz.'); return; }
+  const izin = await izinIste();
+  if(!izin.ok){ alert(izin.mesaj); return; }
+  aktifKosul = kosulKodu;
+  ['#cardSetup','#cardTest','#cardBatarya','#cardSonuc','#cardOzet','#cardKayitlar']
+    .forEach(s=>show($(s),false));
+  show($('#cardKayit'),true);
+  $('#kayitKosul').textContent = kosulAd(kosulKodu);
+  try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+
+  for(let s=3;s>=1;s--){
+    $('#sayac').textContent=s; $('#kayitDurum').textContent='Hazırlanın…'; bip(660,90);
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  bip(1200,220);
+
+  buf=bosBuf(); markerler=[]; kayitAktif=true;
+  const sure=Math.max(10,Math.min(180,sureSn||30));
+  dinlemeyeBasla(buf);
+  const t0=performance.now();
+  $('#kayitDurum').textContent='Sabit durun — kayıt sürüyor';
+  const tik=()=>{
+    if(!kayitAktif) return;
+    const gecen=(performance.now()-t0)/1000;
+    $('#sayac').textContent=Math.max(0,sure-gecen).toFixed(1);
+    $('#liveN').textContent=buf.t.length;
+    const d=araliklar(buf.t.slice(-50));
+    $('#liveHz').textContent = d.length? (1000/medyan(d)).toFixed(1)+' Hz':'–';
+    ciz();
+    if(gecen>=sure){ bitir(true); return; }
+    requestAnimationFrame(tik);
+  };
+  requestAnimationFrame(tik);
+}
+
+$('#btnBasla').addEventListener('click', ()=> olcumBaslat($('#kosul').value, +$('#sure').value));
+$('#btnBatBasla').addEventListener('click', ()=> { if(aktifKosul) olcumBaslat(aktifKosul, +$('#batSure').value); });
+$('#btnMarker').addEventListener('click', ()=>{
+  if(!kayitAktif) return;
+  markerler.push(performance.now()); bip(1600,80);
+  $('#kayitDurum').textContent=`Sabit durun — ${markerler.length} senkron işareti kondu`;
+});
+$('#btnIptal').addEventListener('click', ()=> bitir(false));
+
+async function bitir(tamamlandi){
+  kayitAktif=false; dinlemeyiBirak();
+  try{ if(wakeLock){ await wakeLock.release(); wakeLock=null; } }catch(e){}
+  show($('#cardKayit'),false);
+  if(!tamamlandi){ buf=null; await ekranaDon(); return; }
+  bip(520,300);
+  const k=kaliteHesapla(buf), m=metrikHesapla(buf);
+  const hzS=k.hz>=90?'ok':(k.hz>=45?'warn':'bad');
+  const jtS=k.jitterYuzde<15?'ok':(k.jitterYuzde<35?'warn':'bad');
+  const bkS=k.boslukYuzde<1?'ok':(k.boslukYuzde<5?'warn':'bad');
+  const p=(c,v)=>`<span class="pill ${c}">${v}</span>`;
+  $('#kalite').innerHTML=`
+    <div class="kv"><span>Örnek sayısı</span><b class="mono">${k.n}</b></div>
+    <div class="kv"><span>Kayıt süresi</span><b class="mono">${k.sure.toFixed(2)} sn</b></div>
+    <div class="kv"><span>Frekans</span><b class="mono">${k.hz.toFixed(1)} Hz ${p(hzS,hzS==='ok'?'iyi':(hzS==='warn'?'sınırda':'düşük'))}</b></div>
+    <div class="kv"><span>Aralık medyan / SD</span><b class="mono">${k.medDt.toFixed(1)} / ${k.sdDt.toFixed(1)} ms ${p(jtS,'%'+k.jitterYuzde.toFixed(0))}</b></div>
+    <div class="kv"><span>Atlanan aralık</span><b class="mono">${k.bosluk} ${p(bkS,'%'+k.boslukYuzde.toFixed(1))}</b></div>
+    ${mod==='arastirma'?`<div class="kv"><span>Senkron işareti</span><b class="mono">${markerler.length}</b></div>`:''}`;
+
+  $('#sonucBaslik').innerHTML = mod==='arastirma'
+    ? 'Ön izleme <span class="muted" style="text-transform:none;letter-spacing:0">(çalışma analizi değil)</span>'
+    : 'Ölçüm sonucu';
+  $('#sonucNot').innerHTML = mod==='arastirma'
+    ? 'Bu değerler sahada gözle kontrol içindir. Çalışmanın sonuç değişkenleri dışa aktarılan <b>ham veriden</b> Python analiz hattıyla hesaplanır.'
+    : 'Değerler, çevrimdışı analiz hattıyla <b>aynı algoritmayla</b> hesaplanır (0,15–10 Hz sıfır fazlı bant geçiren, ilk 5 sn atılır). Ham veri yine kaydedilir.';
+  $('#onizleme').innerHTML = m ? `
+    <div class="kv"><span>Ortalama bileşke ivme <span class="pill n">birincil</span></span><b class="mono">${m.ortBilesik.toFixed(4)} m/s²</b></div>
+    <div class="kv"><span>RMS ön-arka (AP)</span><b class="mono">${m.rmsAP.toFixed(4)} m/s²</b></div>
+    <div class="kv"><span>RMS yan (ML)</span><b class="mono">${m.rmsML.toFixed(4)} m/s²</b></div>
+    <div class="kv"><span>Eksen ataması</span><b class="mono">dikey ${m.dikeyEksen} · AP ${m.apEksen} · ML ${m.mlEksen}</b></div>
+    <div class="kv"><span>Analiz penceresi</span><b class="mono">${m.pencereSn.toFixed(1)} sn</b></div>`
+    : '<p class="note bad">Hesaplanamadı — kayıt çok kısa.</p>';
+
+  sonDeneme = {
+    mod, katilimci:$('#katilimci').value.trim(),
+    oturum: mod==='arastirma' ? $('#oturum').value : '',
+    yerlesim:$('#yerlesim').value, kosul:aktifKosul,
+    deneme:+$('#denemeNo').textContent, hedefSure:0,
+    not:$('#not').value.trim(), tarih:new Date().toISOString(),
+    ua:navigator.userAgent, ekran:`${screen.width}x${screen.height}@${devicePixelRatio}`,
+    nominalInterval:buf.interval, kalite:k, metrik:m,
+    markerler:markerler.map(x=>x-buf.t[0]), veri:buf
+  };
+  show($('#cardSonuc'),true);
+}
+
+async function ekranaDon(){
+  show($('#cardSetup'),true);
+  show($('#cardTest'), mod==='arastirma');
+  show($('#cardBatarya'), mod==='bagimsiz');
+  show($('#cardKayitlar'),true);
+  await bataryaCiz(); await yenile();
+}
+
+$('#btnKaydet').addEventListener('click', async ()=>{
+  // batarya modunda deneme no'yu koşul içindeki sıraya göre ver
+  if(mod==='bagimsiz'){
+    const hepsi=await dbHepsi(), bugun=sonDeneme.tarih.slice(0,10);
+    sonDeneme.deneme = hepsi.filter(x=>x.katilimci===sonDeneme.katilimci &&
+      x.kosul===sonDeneme.kosul && x.mod==='bagimsiz' && x.tarih.slice(0,10)===bugun).length + 1;
+  }
+  await dbEkle(sonDeneme);
+  sonDeneme=null; buf=null;
+  show($('#cardSonuc'),false);
+  await ekranaDon();
+});
+$('#btnAt').addEventListener('click', async ()=>{
+  sonDeneme=null; buf=null; show($('#cardSonuc'),false); await ekranaDon();
+});
+
+/* ---------- bağımsız mod: özet + takip ---------- */
+$('#btnBatOzet').addEventListener('click', async ()=>{
+  const hepsi=await dbHepsi();
+  const kat=$('#katilimci').value.trim();
+  const kendi=hepsi.filter(x=>x.katilimci===kat && x.mod==='bagimsiz' && x.metrik);
+  if(!kendi.length){ alert('Bu kod için bağımsız ölçüm kaydı yok.'); return; }
+  const gunler=[...new Set(kendi.map(x=>x.tarih.slice(0,10)))].sort();
+  const bugun=gunler[gunler.length-1], onceki=gunler.length>1? gunler[gunler.length-2] : null;
+
+  const gunOrt=(gun)=>{
+    const o={};
+    KOSULLAR.filter(k=>k.batarya).forEach(k=>{
+      const d=kendi.filter(x=>x.kosul===k.k && x.tarih.slice(0,10)===gun);
+      o[k.k]= d.length? ortalama(d.map(x=>x.metrik.ortBilesik)) : NaN;
+    });
+    return o;
+  };
+  const b=gunOrt(bugun), e=onceki? gunOrt(onceki) : null;
+
+  let h=`<p class="note" style="margin-top:0">Kod <b>${kat}</b> · ${bugun}${onceki?` (önceki ölçüm: ${onceki})`:''}</p>`;
+  h+=`<h2 style="margin-top:12px">Koşul bazında (ortalama bileşke ivme, m/s²)</h2><table>
+      <tr><th>Koşul</th><th>Bugün</th>${onceki?'<th>Önceki</th><th>Değişim</th>':''}</tr>`;
+  KOSULLAR.filter(k=>k.batarya).forEach(k=>{
+    const v=b[k.k], p=e?e[k.k]:NaN;
+    const dg = (!isNaN(v)&&!isNaN(p)&&p) ? 100*(v-p)/p : NaN;
+    h+=`<tr><td>${k.ad}</td><td class="mono">${isNaN(v)?'—':v.toFixed(4)}</td>`;
+    if(onceki) h+=`<td class="mono">${isNaN(p)?'—':p.toFixed(4)}</td>
+      <td class="mono ${isNaN(dg)?'':(dg<0?'ok':'warn')}">${isNaN(dg)?'—':(dg>0?'+':'')+dg.toFixed(1)+'%'}</td>`;
+    h+='</tr>';
+  });
+  h+='</table>';
+
+  h+=`<h2 style="margin-top:16px">Duyusal oranlar <span class="muted" style="text-transform:none;letter-spacing:0">· birimsiz</span></h2>`;
+  ORANLAR.forEach(o=>{
+    const v = (b[o.pay]&&b[o.payda])? b[o.pay]/b[o.payda] : NaN;
+    const p = (e&&e[o.pay]&&e[o.payda])? e[o.pay]/e[o.payda] : NaN;
+    h+=`<div class="kv"><span>${o.ad} <span class="muted">(${o.pay}/${o.payda})</span></span>
+      <b class="mono">${isNaN(v)?'—':v.toFixed(2)}${(!isNaN(p))?` <span class="muted">← ${p.toFixed(2)}</span>`:''}</b></div>`;
+  });
+  h+=`<p class="note">Oranlar birimsizdir; bu yüzden HUR'un kompozit skorlarıyla <b>doğrudan</b> karşılaştırılabilir
+      ve cihazdan/telefon modelinden bağımsızdır. Romberg oranının yükselmesi görsel girdiye bağımlılığın arttığını gösterir.</p>
+      <p class="note"><b>Not:</b> Anlamlı değişim eşiği (MDC₉₅) bu çalışmanın verisiyle hesaplanacaktır;
+      o zamana kadar yüzde değişimler yorumlanırken ölçüm hatası payı akılda tutulmalıdır.</p>`;
+  $('#ozetIcerik').innerHTML=h;
+  show($('#cardOzet'),true);
+  $('#cardOzet').scrollIntoView({behavior:'smooth'});
+});
+$('#btnOzetKapat').addEventListener('click', ()=> show($('#cardOzet'),false));
+
+/* ---------- liste + dışa aktarma ---------- */
+async function yenile(){
+  const hepsi=await dbHepsi();
+  const kat=$('#katilimci').value.trim(), ot=$('#oturum').value, ks=$('#kosul').value;
+  $('#denemeNo').textContent = hepsi.filter(d=>d.katilimci===kat && d.oturum===ot &&
+    d.kosul===ks && d.mod==='arastirma').length + 1;
+  if(!hepsi.length){ $('#liste').innerHTML='<p class="muted" style="font-size:13px">Henüz kayıt yok.</p>'; return; }
+  const satir=hepsi.slice().reverse().slice(0,25).map(d=>`<tr>
+      <td>${d.mod==='arastirma'?'A':'B'}</td><td>${d.katilimci}</td><td>${d.oturum||'–'}</td>
+      <td>${d.kosul}</td><td>${d.deneme}</td>
+      <td class="mono">${d.kalite.hz.toFixed(0)}</td></tr>`).join('');
+  $('#liste').innerHTML=`<table><tr><th>Mod</th><th>Kod</th><th>Ot.</th><th>Koşul</th><th>#</th><th>Hz</th></tr>${satir}</table>
+    <p class="note">${hepsi.length} deneme · ${hepsi.reduce((s,d)=>s+d.kalite.n,0).toLocaleString('tr')} örnek
+    ${hepsi.length>25?'· son 25 gösteriliyor':''}</p>`;
+}
+
+function indir(ad, metin){
+  const url=URL.createObjectURL(new Blob([metin],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download=ad;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500);
+}
+
+$('#btnCsv').addEventListener('click', async ()=>{
+  const hepsi=await dbHepsi();
+  if(!hepsi.length) return alert('Kayıt yok.');
+  const bas=['mod','katilimci','oturum','yerlesim','kosul','deneme','t_ms','ax','ay','az',
+             'lax','lay','laz','gr_alpha','gr_beta','gr_gamma'];
+  const sat=[bas.join(',')], f=v=>v==null?'':(+v).toFixed(6);
+  for(const d of hepsi){
+    const b=d.veri, t0=b.t[0];
+    const on=`${d.mod},${d.katilimci},${d.oturum||''},${d.yerlesim},${d.kosul},${d.deneme}`;
+    for(let i=0;i<b.t.length;i++)
+      sat.push(`${on},${(b.t[i]-t0).toFixed(3)},${f(b.ax[i])},${f(b.ay[i])},${f(b.az[i])},${f(b.lx[i])},${f(b.ly[i])},${f(b.lz[i])},${f(b.ra[i])},${f(b.rb[i])},${f(b.rg[i])}`);
+  }
+  indir(`ham_${hepsi[0].katilimci||'kayit'}_${new Date().toISOString().slice(0,10)}.csv`, sat.join('\n'));
+});
+
+$('#btnOzetCsv').addEventListener('click', async ()=>{
+  const hepsi=await dbHepsi();
+  if(!hepsi.length) return alert('Kayıt yok.');
+  const bas=['mod','katilimci','oturum','yerlesim','kosul','deneme','tarih','kayit_sure_sn','n_ornek',
+    'frekans_hz','dt_medyan_ms','dt_sd_ms','jitter_yuzde','bosluk_sayisi','bosluk_yuzde','en_uzun_dt_ms',
+    'nominal_interval_ms','dikey_eksen','ap_eksen','ml_eksen','rms_ap','rms_ml','ort_bileske',
+    'markerler_ms','ekran','ua','not'];
+  const sat=[bas.join(',')], q=s=>`"${String(s??'').replace(/"/g,'""')}"`;
+  for(const d of hepsi){
+    const k=d.kalite, o=d.metrik||{};
+    sat.push([d.mod,q(d.katilimci),d.oturum||'',d.yerlesim,d.kosul,d.deneme,q(d.tarih),
+      k.sure.toFixed(3),k.n,k.hz.toFixed(2),k.medDt.toFixed(2),k.sdDt.toFixed(2),
+      k.jitterYuzde.toFixed(2),k.bosluk,k.boslukYuzde.toFixed(2),k.enBuyukDt.toFixed(1),
+      d.nominalInterval??'',o.dikeyEksen??'',o.apEksen??'',o.mlEksen??'',
+      o.rmsAP!=null?o.rmsAP.toFixed(6):'',o.rmsML!=null?o.rmsML.toFixed(6):'',
+      o.ortBilesik!=null?o.ortBilesik.toFixed(6):'',
+      q(d.markerler.map(m=>m.toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not)].join(','));
+  }
+  indir(`ozet_${hepsi[0].katilimci||'kayit'}_${new Date().toISOString().slice(0,10)}.csv`, sat.join('\n'));
+});
+
+$('#btnSil').addEventListener('click', async ()=>{
+  if(!confirm('TÜM kayıtlar silinecek. CSV indirdiniz mi?')) return;
+  await dbTemizle(); await yenile(); await bataryaCiz();
+});
+
+['#katilimci','#oturum'].forEach(s=>$(s).addEventListener('change', async()=>{ await yenile(); await bataryaCiz(); }));
+
+/* ---------- başlat ---------- */
+(async ()=>{
+  await dbAc(); modAyarla('arastirma');
+  if(!window.isSecureContext){
+    document.body.insertAdjacentHTML('afterbegin',
+      '<div class="err">Sayfa güvenli bağlamda (HTTPS) açılmadı. iOS ve Android hareket sensörü iznini vermez. README\'deki yayınlama adımlarını izleyin.</div>');
+  }
+})();
+</script>
+</body>
+</html>
