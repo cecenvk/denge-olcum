@@ -63,7 +63,7 @@
 <body>
 
 <h1>Denge Ölçüm Kaydedici</h1>
-<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.2</p>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.3</p>
 
 <!-- ============ MOD ============ -->
 <div class="modlar">
@@ -97,9 +97,9 @@
   <h2>Deneme</h2>
   <div class="row">
     <div><label>Koşul</label><select id="kosul"></select></div>
-    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="35" inputmode="numeric"></div>
+    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="40" inputmode="numeric"></div>
   </div>
-  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>5 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 35 sn kullanın:</b> kayıt başladıktan 5 sn sonra çift bip duyulur — o anda HUR kaydını başlatın. Böylece telefonun analiz penceresi (5–35 sn) HUR’un 30 sn’siyle birebir örtüşür ve telefona dokunmanız gerekmez.</div>
+  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>10 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 40 sn kullanın:</b> kayıt başladıktan 5 sn sonra çift bip duyulur — o anda HUR’da Start’a basın. HUR’un kendi <b>5 sn geri sayımı</b> vardır, kaydı 10. saniyede başlatır; telefonun analiz penceresi (10–40 sn) HUR’un 30 sn’siyle birebir örtüşür ve telefona dokunmanız gerekmez.</div>
   <button id="btnBasla">Ölçüme başla</button>
 </div>
 
@@ -199,9 +199,19 @@ const ORANLAR = [
 
 /* ---------- durum ---------- */
 let mod = 'arastirma';
-const ATIL_SN = 5.0;   // analiz penceresinin basindan atilan sure (analiz.py ile ayni)
+const ISARET_SN = 5.0;          // cift bip: operator bu anda HUR'da Start'a basar
+const HUR_GERI_SAYIM_SN = 5.0;  // HUR Start'tan sonra kendi geri sayimini yapar (11.09.2026 cihazda dogrulandi)
+const ATIL_SN = ISARET_SN + HUR_GERI_SAYIM_SN;  // analizde atilan sure (analiz.py --atil ile ayni)
+const HUR_TOPLAM_SN = ATIL_SN + 30;             // eszamanli kayitta telefon kayit suresi = 40 sn
 let buf = null, markerler = [], sonDeneme = null;
 let kayitAktif = false, wakeLock = null, audioCtx = null;
+// Sayfa gizlenirse requestAnimationFrame donar: sayac durur, cift bip GELMEZ ve devicemotion
+// olaylari kesilir. Kalite kutusu bunu bosluk olarak da yakalar, ama deneme acikca
+// isaretlenmeli -- eszamanli kayitta isaret kacarsa HUR hic baslatilamaz.
+let gizlendi = false;
+document.addEventListener('visibilitychange', ()=>{
+  if(kayitAktif && document.visibilityState==='hidden') gizlendi = true;
+});
 async function ekranKilitle(){ try{ if('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 async function ekranBirak(){ try{ if(wakeLock){ await wakeLock.release(); wakeLock=null; } }catch(e){} }
 // Ekran klavyesinin kapanma animasyonu ana is parcacigini mesgul edip devicemotion
@@ -390,6 +400,7 @@ function modAyarla(yeni){
   show($('#btnMarker'), ar);
   show($('#cardTest'), false); show($('#cardBatarya'), false);
   show($('#cardSonuc'), false); show($('#cardOzet'), false);
+  sureyiAyarla();
   bataryaCiz();
   yenile();
 }
@@ -399,13 +410,17 @@ document.querySelectorAll('.mod').forEach(b=>
 /* koşul listesini doldur */
 KOSULLAR.forEach(k=>{
   const o=document.createElement('option');
-  o.value=k.k; o.textContent=k.ad; o.dataset.sure=k.sure;
+  o.value=k.k; o.textContent=k.ad; o.dataset.sure=k.sure; o.dataset.hur=k.batarya?'1':'0';
   $('#kosul').appendChild(o);
 });
-$('#kosul').addEventListener('change', e=>{
-  $('#sure').value = e.target.selectedOptions[0].dataset.sure;
-  yenile();
-});
+function sureyiAyarla(){
+  const o=$('#kosul').selectedOptions[0]; if(!o) return;
+  // Arastirma modunda HUR bataryasindaki kosullar 40 sn kaydedilir (30 sn pencere + 10 sn atilan);
+  // bagimsiz modda ve HUR disi kosullarda kosulun kendi suresi gecerlidir.
+  const hurKosulu = o.dataset.hur==='1';
+  $('#sure').value = (mod==='arastirma' && hurKosulu) ? HUR_TOPLAM_SN : o.dataset.sure;
+}
+$('#kosul').addEventListener('change', ()=>{ sureyiAyarla(); yenile(); });
 
 /* ---------- batarya ---------- */
 async function bataryaCiz(){
@@ -498,19 +513,20 @@ async function olcumBaslat(kosulKodu, sureSn){
   }
   bip(1200,220);
 
-  buf=bosBuf(); markerler=[]; kayitAktif=true;
+  buf=bosBuf(); markerler=[]; gizlendi=false; kayitAktif=true;
   const sure=Math.max(10,Math.min(180,sureSn||30));
   dinlemeyeBasla(buf);
   const t0=performance.now();
   $('#kayitDurum').textContent='Sabit durun — kayıt sürüyor';
-  // HUR ile pencere hizalamasi: analizde ilk ATIL_SN saniye atildigi icin, HUR kaydi
-  // tam o anda baslatilirsa telefonun analiz penceresi HUR'un penceresiyle ortusur.
+  // HUR ile pencere hizalamasi: ISARET_SN'de cift bip calar, operator HUR'da Start'a basar.
+  // HUR kendi 5 sn geri sayimini yapip kaydi ISARET_SN + HUR_GERI_SAYIM_SN = ATIL_SN aninda
+  // baslatir; analizde de ilk ATIL_SN saniye atildigi icin iki pencere birebir ortusur.
   // Isaret SESLIDIR; operatorun telefona dokunmasi gerekmez (dokunmak veri dusuruyor).
   let hurIsareti = (mod!=='arastirma');
   const tik=()=>{
     if(!kayitAktif) return;
     const gecen=(performance.now()-t0)/1000;
-    if(!hurIsareti && gecen>=ATIL_SN){
+    if(!hurIsareti && gecen>=ISARET_SN){
       hurIsareti=true;
       bip(1800,130); setTimeout(()=>bip(1800,130),190);
       markerler.push(performance.now());
@@ -555,6 +571,9 @@ async function bitir(tamamlandi){
     <div class="kv"><span>Aralık p10 / p50 / p90</span><b class="mono">${k.p10!=null?k.p10.toFixed(1):'–'} / ${k.p50!=null?k.p50.toFixed(1):k.medDt.toFixed(1)} / ${k.p90!=null?k.p90.toFixed(1):'–'} ms</b></div>
     <div class="kv"><span>En uzun boşluk</span><b class="mono">${k.enBuyukDt.toFixed(0)} ms ${p(enS,enS==='ok'?'iyi':(enS==='warn'?'sınırda':'uzun'))}</b></div>
     <div class="kv"><span>Atlanan aralık</span><b class="mono">${k.bosluk} ${p(bkS,'%'+k.boslukYuzde.toFixed(1))}</b></div>
+    ${gizlendi
+      ? '<p class="note" style="color:#ff9a9a"><b>Kayıt sırasında sayfa arka plana düştü.</b> Sayaç ve sesli işaret durmuş, sensör verisi kesilmiş olabilir. <b>Bu deneme geçersiz sayılmalı.</b> Ölçüm boyunca uygulama ekranda açık kalmalı.</p>'
+      : ''}
     ${(k.enBuyukDt>=300 || k.ortHz<45 || k.boslukYuzde>=10)
       ? '<p class="note" style="color:#ff9a9a"><b>Bu deneme geçersiz sayılmalı.</b> Kayıtta veri kesintisi var; yeniden örnekleme o aralığı uydurur. “Geçersiz say, atla” deyip denemeyi tekrarlayın. Kayıt sırasında ekrana dokunmayın, klavye açık kalmasın.</p>'
       : ''}
@@ -581,7 +600,7 @@ async function bitir(tamamlandi){
     deneme:+$('#denemeNo').textContent, hedefSure:0,
     not:$('#not').value.trim(), tarih:new Date().toISOString(),
     ua:navigator.userAgent, ekran:`${screen.width}x${screen.height}@${devicePixelRatio}`,
-    nominalInterval:buf.interval, kalite:k, metrik:m,
+    nominalInterval:buf.interval, kalite:k, metrik:m, gizlendi,
     markerler:markerler.map(x=>x-buf.t[0]), veri:buf
   };
   show($('#cardSonuc'),true);
@@ -705,7 +724,7 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
     'frekans_hz','ort_frekans_hz','dt_medyan_ms','dt_sd_ms','dt_p10_ms','dt_p90_ms','obekli_yuzde',
     'jitter_yuzde','bosluk_sayisi','bosluk_yuzde','en_uzun_dt_ms',
     'nominal_interval_ms','dikey_eksen','ap_eksen','ml_eksen','rms_ap','rms_ml','ort_bileske',
-    'markerler_rel_ms','ekran','ua','not'];
+    'markerler_rel_ms','ekran','ua','not','sayfa_gizlendi'];
   const sat=[bas.join(',')], q=s=>`"${String(s??'').replace(/"/g,'""')}"`;
   for(const d of hepsi){
     const k=d.kalite, o=d.metrik||{};
@@ -718,7 +737,8 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
       d.nominalInterval??'',o.dikeyEksen??'',o.apEksen??'',o.mlEksen??'',
       o.rmsAP!=null?o.rmsAP.toFixed(6):'',o.rmsML!=null?o.rmsML.toFixed(6):'',
       o.ortBilesik!=null?o.ortBilesik.toFixed(6):'',
-      q((d.markerler||[]).map(m=>(m-d.veri.t[0]).toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not)].join(','));
+      q((d.markerler||[]).map(m=>Number(m).toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not),
+      d.gizlendi?1:0].join(','));
   }
   indir(`ozet_${hepsi[0].katilimci||'kayit'}_${new Date().toISOString().slice(0,10)}.csv`, sat.join('\n'));
 });
