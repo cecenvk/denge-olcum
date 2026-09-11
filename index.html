@@ -63,7 +63,7 @@
 <body>
 
 <h1>Denge Ölçüm Kaydedici</h1>
-<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.0</p>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.2</p>
 
 <!-- ============ MOD ============ -->
 <div class="modlar">
@@ -97,9 +97,9 @@
   <h2>Deneme</h2>
   <div class="row">
     <div><label>Koşul</label><select id="kosul"></select></div>
-    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="30" inputmode="numeric"></div>
+    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="35" inputmode="numeric"></div>
   </div>
-  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>5 sn</b> atılır.</div>
+  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>5 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 35 sn kullanın:</b> kayıt başladıktan 5 sn sonra çift bip duyulur — o anda HUR kaydını başlatın. Böylece telefonun analiz penceresi (5–35 sn) HUR’un 30 sn’siyle birebir örtüşür ve telefona dokunmanız gerekmez.</div>
   <button id="btnBasla">Ölçüme başla</button>
 </div>
 
@@ -199,6 +199,7 @@ const ORANLAR = [
 
 /* ---------- durum ---------- */
 let mod = 'arastirma';
+const ATIL_SN = 5.0;   // analiz penceresinin basindan atilan sure (analiz.py ile ayni)
 let buf = null, markerler = [], sonDeneme = null;
 let kayitAktif = false, wakeLock = null, audioCtx = null;
 async function ekranKilitle(){ try{ if('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -502,9 +503,20 @@ async function olcumBaslat(kosulKodu, sureSn){
   dinlemeyeBasla(buf);
   const t0=performance.now();
   $('#kayitDurum').textContent='Sabit durun — kayıt sürüyor';
+  // HUR ile pencere hizalamasi: analizde ilk ATIL_SN saniye atildigi icin, HUR kaydi
+  // tam o anda baslatilirsa telefonun analiz penceresi HUR'un penceresiyle ortusur.
+  // Isaret SESLIDIR; operatorun telefona dokunmasi gerekmez (dokunmak veri dusuruyor).
+  let hurIsareti = (mod!=='arastirma');
   const tik=()=>{
     if(!kayitAktif) return;
     const gecen=(performance.now()-t0)/1000;
+    if(!hurIsareti && gecen>=ATIL_SN){
+      hurIsareti=true;
+      bip(1800,130); setTimeout(()=>bip(1800,130),190);
+      markerler.push(performance.now());
+      $('#kayitDurum').textContent='▶ ŞİMDİ HUR KAYDINI BAŞLAT';
+      setTimeout(()=>{ if(kayitAktif) $('#kayitDurum').textContent='Sabit durun — kayıt sürüyor'; },4000);
+    }
     $('#sayac').textContent=Math.max(0,sure-gecen).toFixed(1);
     $('#liveN').textContent=buf.t.length;
     const d=araliklar(buf.t.slice(-50));
@@ -693,7 +705,7 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
     'frekans_hz','ort_frekans_hz','dt_medyan_ms','dt_sd_ms','dt_p10_ms','dt_p90_ms','obekli_yuzde',
     'jitter_yuzde','bosluk_sayisi','bosluk_yuzde','en_uzun_dt_ms',
     'nominal_interval_ms','dikey_eksen','ap_eksen','ml_eksen','rms_ap','rms_ml','ort_bileske',
-    'markerler_ms','ekran','ua','not'];
+    'markerler_rel_ms','ekran','ua','not'];
   const sat=[bas.join(',')], q=s=>`"${String(s??'').replace(/"/g,'""')}"`;
   for(const d of hepsi){
     const k=d.kalite, o=d.metrik||{};
@@ -706,7 +718,7 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
       d.nominalInterval??'',o.dikeyEksen??'',o.apEksen??'',o.mlEksen??'',
       o.rmsAP!=null?o.rmsAP.toFixed(6):'',o.rmsML!=null?o.rmsML.toFixed(6):'',
       o.ortBilesik!=null?o.ortBilesik.toFixed(6):'',
-      q(d.markerler.map(m=>m.toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not)].join(','));
+      q((d.markerler||[]).map(m=>(m-d.veri.t[0]).toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not)].join(','));
   }
   indir(`ozet_${hepsi[0].katilimci||'kayit'}_${new Date().toISOString().slice(0,10)}.csv`, sat.join('\n'));
 });
