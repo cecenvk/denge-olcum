@@ -63,7 +63,7 @@
 <body>
 
 <h1>Denge Ölçüm Kaydedici</h1>
-<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.3</p>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.4</p>
 
 <!-- ============ MOD ============ -->
 <div class="modlar">
@@ -97,9 +97,9 @@
   <h2>Deneme</h2>
   <div class="row">
     <div><label>Koşul</label><select id="kosul"></select></div>
-    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="40" inputmode="numeric"></div>
+    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="43" inputmode="numeric"></div>
   </div>
-  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>10 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 40 sn kullanın:</b> kayıt başladıktan 5 sn sonra çift bip duyulur — o anda HUR’da Start’a basın. HUR’un kendi <b>5 sn geri sayımı</b> vardır, kaydı 10. saniyede başlatır; telefonun analiz penceresi (10–40 sn) HUR’un 30 sn’siyle birebir örtüşür ve telefona dokunmanız gerekmez.</div>
+  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>10 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 43 sn kullanın.</b> Kayıt başlayınca <b>2., 3. ve 4. saniyede birer kısa bip</b> duyulur (üç–iki–bir), <b>5. saniyede çift bip</b> — parmağınız Start’ın üzerinde, çift bipte basın. Ritmi dinleyip <i>öngörerek</i> basmak, bipi duyup tepki vermekten ~1,5 sn daha isabetlidir. HUR’un kendi <b>5 sn geri sayımı</b> vardır; sondaki <b>3 sn emniyet payı</b> geç basılsa bile HUR’un 30 saniyesinin telefon kaydının içinde kalmasını sağlar. Telefona dokunmayın.</div>
   <button id="btnBasla">Ölçüme başla</button>
 </div>
 
@@ -135,8 +135,9 @@
   <h2 style="margin-top:16px" id="sonucBaslik">Sonuç</h2>
   <div id="onizleme"></div>
   <p class="note" id="sonucNot"></p>
-  <button id="btnKaydet">Kaydet</button>
-  <button class="danger" id="btnAt">Geçersiz say, atla</button>
+  <p class="note" id="kayitDurumu"></p>
+  <button id="btnKaydet">Tamam, devam</button>
+  <button class="danger" id="btnAt">Geçersiz işaretle</button>
 </div>
 
 <!-- ============ 5. BAĞIMSIZ: ÖZET ============ -->
@@ -200,9 +201,14 @@ const ORANLAR = [
 /* ---------- durum ---------- */
 let mod = 'arastirma';
 const ISARET_SN = 5.0;          // cift bip: operator bu anda HUR'da Start'a basar
+const ON_BIP_SN = [2.0, 3.0, 4.0];  // "uc-iki-bir": operator basisi TEPKI degil ONGORU ile yapar
 const HUR_GERI_SAYIM_SN = 5.0;  // HUR Start'tan sonra kendi geri sayimini yapar (11.09.2026 cihazda dogrulandi)
 const ATIL_SN = ISARET_SN + HUR_GERI_SAYIM_SN;  // analizde atilan sure (analiz.py --atil ile ayni)
-const HUR_TOPLAM_SN = ATIL_SN + 30;             // eszamanli kayitta telefon kayit suresi = 40 sn
+// 14.09.2026 saha olcumu: tek uyarili (tepkisel) duzende operatorun basisi 1,5-2 sn gecikiyordu.
+// Cozum iki parcali: (1) yukaridaki on bipler, (2) asagidaki 3 sn'lik emniyet payi -- operator
+// gec bassa bile HUR'un 30 saniyesinin TAMAMI telefon kaydinin icinde kalir.
+const PAY_SN = 3.0;
+const HUR_TOPLAM_SN = ATIL_SN + 30 + PAY_SN;    // eszamanli kayitta telefon kayit suresi = 43 sn
 let buf = null, markerler = [], sonDeneme = null;
 let kayitAktif = false, wakeLock = null, audioCtx = null;
 // Sayfa gizlenirse requestAnimationFrame donar: sayac durur, cift bip GELMEZ ve devicemotion
@@ -242,6 +248,9 @@ function dbHepsi(){ return new Promise((res,rej)=>{
 function dbTemizle(){ return new Promise((res,rej)=>{
   const rq = db.transaction('denemeler','readwrite').objectStore('denemeler').clear();
   rq.onsuccess=()=>res(); rq.onerror=()=>rej(rq.error); }); }
+function dbYaz(o){ return new Promise((res,rej)=>{
+  const rq = db.transaction('denemeler','readwrite').objectStore('denemeler').put(o);
+  rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
 
 /* ---------- ses ---------- */
 function bip(freq=880, ms=140){
@@ -523,9 +532,16 @@ async function olcumBaslat(kosulKodu, sureSn){
   // baslatir; analizde de ilk ATIL_SN saniye atildigi icin iki pencere birebir ortusur.
   // Isaret SESLIDIR; operatorun telefona dokunmasi gerekmez (dokunmak veri dusuruyor).
   let hurIsareti = (mod!=='arastirma');
+  let onBipSayaci = hurIsareti ? ON_BIP_SN.length : 0;  // bagimsiz modda on bip calmaz
   const tik=()=>{
     if(!kayitAktif) return;
     const gecen=(performance.now()-t0)/1000;
+    // "uc-iki-bir" on bipleri: operator cift bipi BEKLEMEK yerine ritmi izleyip ongorerek basar.
+    if(onBipSayaci < ON_BIP_SN.length && gecen >= ON_BIP_SN[onBipSayaci]){
+      bip(1000, 70);
+      $('#kayitDurum').textContent = `HUR Start'a hazırlanın — ${ON_BIP_SN.length - onBipSayaci}`;
+      onBipSayaci++;
+    }
     if(!hurIsareti && gecen>=ISARET_SN){
       hurIsareti=true;
       bip(1800,130); setTimeout(()=>bip(1800,130),190);
@@ -597,12 +613,32 @@ async function bitir(tamamlandi){
     mod, katilimci:$('#katilimci').value.trim(),
     oturum: mod==='arastirma' ? $('#oturum').value : '',
     yerlesim:$('#yerlesim').value, kosul:aktifKosul,
-    deneme:+$('#denemeNo').textContent, hedefSure:0,
+    deneme:1, hedefSure:0, gecersiz:0,
     not:$('#not').value.trim(), tarih:new Date().toISOString(),
     ua:navigator.userAgent, ekran:`${screen.width}x${screen.height}@${devicePixelRatio}`,
     nominalInterval:buf.interval, kalite:k, metrik:m, gizlendi,
     markerler:markerler.map(x=>x-buf.t[0]), veri:buf
   };
+
+  // --- OTOMATIK KAYIT ---
+  // v2.3'e kadar deneme yalnizca "Kaydet"e basilinca yaziliyordu; basilmadan cikilirsa
+  // (uygulama arka plana atilirsa iOS sayfayi bastan yukluyor) veri SESSIZCE kayboluyordu.
+  // Artik olcum biter bitmez yazilir; "Geçersiz işaretle" silmez, isaretler.
+  try{
+    const hepsi = await dbHepsi();
+    const bugun = sonDeneme.tarih.slice(0,10);
+    sonDeneme.deneme = hepsi.filter(x=> x.katilimci===sonDeneme.katilimci &&
+      x.kosul===sonDeneme.kosul && x.mod===sonDeneme.mod &&
+      (sonDeneme.mod==='arastirma' ? x.oturum===sonDeneme.oturum
+                                   : x.tarih.slice(0,10)===bugun)).length + 1;
+    sonDeneme.id = await dbEkle(sonDeneme);
+    $('#kayitDurumu').className = 'note ok';
+    $('#kayitDurumu').innerHTML = `<b>✔ Kaydedildi</b> — deneme #${sonDeneme.deneme}, bu cihazda ${(await dbHepsi()).length} kayıt var.`;
+  }catch(err){
+    $('#kayitDurumu').className = 'note bad';
+    $('#kayitDurumu').innerHTML = `<b>KAYIT BAŞARISIZ:</b> ${err && err.message ? err.message : err}. Bu denemeyi tekrarlayın.`;
+  }
+  await yenile();
   show($('#cardSonuc'),true);
 }
 
@@ -614,19 +650,18 @@ async function ekranaDon(){
   await bataryaCiz(); await yenile();
 }
 
+// Deneme olcum biter bitmez yazildi (bkz. bitir). Bu dugme yalnizca ekrani kapatir.
 $('#btnKaydet').addEventListener('click', async ()=>{
-  // batarya modunda deneme no'yu koşul içindeki sıraya göre ver
-  if(mod==='bagimsiz'){
-    const hepsi=await dbHepsi(), bugun=sonDeneme.tarih.slice(0,10);
-    sonDeneme.deneme = hepsi.filter(x=>x.katilimci===sonDeneme.katilimci &&
-      x.kosul===sonDeneme.kosul && x.mod==='bagimsiz' && x.tarih.slice(0,10)===bugun).length + 1;
-  }
-  await dbEkle(sonDeneme);
   sonDeneme=null; buf=null;
   show($('#cardSonuc'),false);
   await ekranaDon();
 });
+// Silmez: kaydi "gecersiz" isaretler. Ham veri diskte kalir, analiz hatti bu satirlari atar.
 $('#btnAt').addEventListener('click', async ()=>{
+  if(sonDeneme && sonDeneme.id!=null){
+    try{ sonDeneme.gecersiz=1; await dbYaz(sonDeneme); }
+    catch(err){ alert('İşaretlenemedi: '+(err && err.message ? err.message : err)); }
+  }
   sonDeneme=null; buf=null; show($('#cardSonuc'),false); await ekranaDon();
 });
 
@@ -686,12 +721,14 @@ async function yenile(){
   $('#denemeNo').textContent = hepsi.filter(d=>d.katilimci===kat && d.oturum===ot &&
     d.kosul===ks && d.mod==='arastirma').length + 1;
   if(!hepsi.length){ $('#liste').innerHTML='<p class="muted" style="font-size:13px">Henüz kayıt yok.</p>'; return; }
-  const satir=hepsi.slice().reverse().slice(0,25).map(d=>`<tr>
+  const satir=hepsi.slice().reverse().slice(0,25).map(d=>`<tr${d.gecersiz?' style="opacity:.5"':''}>
       <td>${d.mod==='arastirma'?'A':'B'}</td><td>${d.katilimci}</td><td>${d.oturum||'–'}</td>
-      <td>${d.kosul}</td><td>${d.deneme}</td>
+      <td>${d.kosul}</td><td>${d.deneme}${d.gecersiz?' <span class="pill bad">geçersiz</span>':''}</td>
       <td class="mono">${d.kalite.hz.toFixed(0)}</td></tr>`).join('');
+  const gecersizSayi = hepsi.filter(d=>d.gecersiz).length;
   $('#liste').innerHTML=`<table><tr><th>Mod</th><th>Kod</th><th>Ot.</th><th>Koşul</th><th>#</th><th>Hz</th></tr>${satir}</table>
-    <p class="note">${hepsi.length} deneme · ${hepsi.reduce((s,d)=>s+d.kalite.n,0).toLocaleString('tr')} örnek
+    <p class="note">${hepsi.length} deneme${gecersizSayi?` (${gecersizSayi} geçersiz)`:''} ·
+    ${hepsi.reduce((s,d)=>s+d.kalite.n,0).toLocaleString('tr')} örnek
     ${hepsi.length>25?'· son 25 gösteriliyor':''}</p>`;
 }
 
@@ -705,12 +742,12 @@ function indir(ad, metin){
 $('#btnCsv').addEventListener('click', async ()=>{
   const hepsi=await dbHepsi();
   if(!hepsi.length) return alert('Kayıt yok.');
-  const bas=['mod','katilimci','oturum','yerlesim','kosul','deneme','t_ms','ax','ay','az',
+  const bas=['mod','katilimci','oturum','yerlesim','kosul','deneme','gecersiz','isaret_ms','t_ms','ax','ay','az',
              'lax','lay','laz','gr_alpha','gr_beta','gr_gamma'];
   const sat=[bas.join(',')], f=v=>v==null?'':(+v).toFixed(6);
   for(const d of hepsi){
     const b=d.veri, t0=b.t[0];
-    const on=`${d.mod},${d.katilimci},${d.oturum||''},${d.yerlesim},${d.kosul},${d.deneme}`;
+    const on=`${d.mod},${d.katilimci},${d.oturum||''},${d.yerlesim},${d.kosul},${d.deneme},${d.gecersiz?1:0},${(d.markerler&&d.markerler.length)?Math.round(d.markerler[0]):''}`;
     for(let i=0;i<b.t.length;i++)
       sat.push(`${on},${(b.t[i]-t0).toFixed(3)},${f(b.ax[i])},${f(b.ay[i])},${f(b.az[i])},${f(b.lx[i])},${f(b.ly[i])},${f(b.lz[i])},${f(b.ra[i])},${f(b.rb[i])},${f(b.rg[i])}`);
   }
@@ -724,7 +761,7 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
     'frekans_hz','ort_frekans_hz','dt_medyan_ms','dt_sd_ms','dt_p10_ms','dt_p90_ms','obekli_yuzde',
     'jitter_yuzde','bosluk_sayisi','bosluk_yuzde','en_uzun_dt_ms',
     'nominal_interval_ms','dikey_eksen','ap_eksen','ml_eksen','rms_ap','rms_ml','ort_bileske',
-    'markerler_rel_ms','ekran','ua','not','sayfa_gizlendi'];
+    'markerler_rel_ms','ekran','ua','not','sayfa_gizlendi','gecersiz'];
   const sat=[bas.join(',')], q=s=>`"${String(s??'').replace(/"/g,'""')}"`;
   for(const d of hepsi){
     const k=d.kalite, o=d.metrik||{};
@@ -738,7 +775,7 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
       o.rmsAP!=null?o.rmsAP.toFixed(6):'',o.rmsML!=null?o.rmsML.toFixed(6):'',
       o.ortBilesik!=null?o.ortBilesik.toFixed(6):'',
       q((d.markerler||[]).map(m=>Number(m).toFixed(0)).join(';')),q(d.ekran),q(d.ua),q(d.not),
-      d.gizlendi?1:0].join(','));
+      d.gizlendi?1:0, d.gecersiz?1:0].join(','));
   }
   indir(`ozet_${hepsi[0].katilimci||'kayit'}_${new Date().toISOString().slice(0,10)}.csv`, sat.join('\n'));
 });
