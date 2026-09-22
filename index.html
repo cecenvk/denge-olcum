@@ -26,6 +26,8 @@
   button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;
     font-family:inherit;background:var(--accent);color:#03212b;margin-top:10px}
   button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .kodsatir{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:stretch}
+  button.mini{width:auto;margin-top:0;padding:0 13px;font-size:13px;font-weight:600;white-space:nowrap}
   button.danger{background:#3a1620;color:#fecaca;border:1px solid #63263a}
   button.mor{background:var(--accent2);color:#1b1035}
   button:disabled{opacity:.4}
@@ -63,7 +65,7 @@
 <body>
 
 <h1>Denge Ölçüm Kaydedici</h1>
-<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.4</p>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.5</p>
 
 <!-- ============ MOD ============ -->
 <div class="modlar">
@@ -77,9 +79,21 @@
 <div class="card" id="cardSetup">
   <h2 id="setupBaslik">Oturum</h2>
   <div class="row">
-    <div><label id="lblKimlik">Katılımcı kodu</label><input id="katilimci" placeholder="K001" autocomplete="off"></div>
+    <div><label id="lblKimlik">Katılımcı kodu</label>
+      <div class="kodsatir">
+        <input id="katilimci" placeholder="F001" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button type="button" class="sec mini" id="btnYeniKisi">+ Yeni kişi</button>
+      </div>
+    </div>
     <div id="wrapOturum"><label>Oturum</label><select id="oturum"><option value="1">1. oturum</option><option value="2">2. oturum</option></select></div>
   </div>
+  <div id="wrapSeri" style="margin-top:10px"><label>Seri</label>
+    <select id="seri">
+      <option value="F">F — ön pilot (teknik deneme, yayımlanmaz)</option>
+      <option value="K">K — asıl çalışma</option>
+    </select>
+  </div>
+  <div id="kodNot" class="note"></div>
   <div style="margin-top:10px"><label>Telefonun yerleşimi</label>
     <select id="yerlesim">
       <option value="bel_L3L5">Bel — L3–L5, kemer</option>
@@ -396,6 +410,90 @@ function ciz(){
   ctx.stroke();
 }
 
+/* ---------- katılımcı kodu (otomatik, elle değiştirilebilir) ----------
+   Amaç: kodun deneme aralarında DEĞİŞMEMESİ. Pilotta 5 deneme 5 ayrı kodla kaydedilmiş,
+   analiz onları 5 katılımcı sanmıştı. Kod artık kendiliğinden geliyor ve sabit kalıyor;
+   yeni kişiye yalnızca "+ Yeni kişi" düğmesiyle (ya da elle yazarak) geçilir. */
+const SERI_AD = {F:'ön pilot', K:'asıl çalışma', H:'bağımsız ölçüm'};
+function seriSec(){ return mod==='arastirma' ? ($('#seri').value || 'F') : 'H'; }
+function kodYap(seri,no){ return seri + String(no).padStart(3,'0'); }
+function kodAyristir(kod){
+  const m = String(kod||'').trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  return m ? {seri:m[1], no:parseInt(m[2],10)} : null;
+}
+function kodKaydet(kod){ try{ localStorage.setItem('denge_kod_'+mod, kod); }catch(e){} }
+function kodOku(){ try{ return localStorage.getItem('denge_kod_'+mod)||''; }catch(e){ return ''; } }
+
+/* Bu seride kullanılmış en büyük numaranın bir fazlası (alandaki kod da hesaba katılır). */
+async function sonrakiKod(seri){
+  const hepsi = await dbHepsi();
+  let enb = 0;
+  hepsi.forEach(d=>{ const a=kodAyristir(d.katilimci); if(a && a.seri===seri && a.no>enb) enb=a.no; });
+  const simdi = kodAyristir($('#katilimci').value);
+  if(simdi && simdi.seri===seri && simdi.no>enb) enb = simdi.no;
+  return kodYap(seri, enb+1);
+}
+
+/* Mod değişince / açılışta alanı doldurur: kaldığın kişiyle DEVAM eder, yeni kod üretmez. */
+async function kodBaslat(){
+  const kayitli = kodOku();
+  if(kayitli){ $('#katilimci').value = kayitli; }
+  else{
+    const hepsi = await dbHepsi();
+    const sonu = hepsi.filter(d=>d.mod===mod).slice(-1)[0];
+    const a = sonu && kodAyristir(sonu.katilimci);
+    $('#katilimci').value = a ? kodYap(a.seri,a.no) : kodYap(seriSec(),1);
+  }
+  const a = kodAyristir($('#katilimci').value);
+  if(a && mod==='arastirma' && (a.seri==='F'||a.seri==='K')) $('#seri').value = a.seri;
+  kodKaydet($('#katilimci').value);
+  await kodNotGuncelle();
+}
+
+async function kodNotGuncelle(){
+  const kod = $('#katilimci').value.trim();
+  const el = $('#kodNot');
+  if(!kod){ el.className='note bad'; el.innerHTML='<b>Kod boş.</b> Ölçüm başlatılamaz.'; return; }
+  const a = kodAyristir(kod);
+  const hepsi = await dbHepsi();
+  const ot = $('#oturum').value;
+  const bu = hepsi.filter(d=>d.katilimci===kod && d.mod===mod &&
+                            (mod==='arastirma' ? d.oturum===ot : true));
+  const gecerli = bu.filter(d=>!d.gecersiz).length;
+  const seriNot = a && SERI_AD[a.seri] ? ` · ${SERI_AD[a.seri]}` : '';
+  if(!bu.length){
+    el.className='note';
+    el.innerHTML = `<b>${kod}</b>${seriNot} — bu kodla henüz kayıt yok. <b>8 denemenin hepsi bu kodla kaydedilecek</b>; deneme aralarında değiştirmeyin.`;
+  }else if(gecerli>=8){
+    el.className='note warn';
+    el.innerHTML = `<b>${kod}</b>${seriNot} — bu kodda <b>${gecerli} geçerli deneme</b> var (hedef 8). Kişi bittiyse <b>“+ Yeni kişi”</b>ye basın.`;
+  }else{
+    el.className='note ok';
+    el.innerHTML = `<b>${kod}</b>${seriNot} — aynı kişiye devam: <b>${gecerli}/8</b> geçerli deneme${bu.length-gecerli?` (${bu.length-gecerli} geçersiz)`:''}.`;
+  }
+}
+
+$('#btnYeniKisi').addEventListener('click', async ()=>{
+  const yeni = await sonrakiKod(seriSec());
+  $('#katilimci').value = yeni;
+  kodKaydet(yeni);
+  await kodNotGuncelle(); await yenile(); await bataryaCiz();
+});
+$('#seri').addEventListener('change', async ()=>{
+  const yeni = await sonrakiKod(seriSec());
+  const a = kodAyristir($('#katilimci').value);
+  /* Seri değişti: o seride kullanılmamış ilk kodu öner; kullanıcı yine elle değiştirebilir. */
+  $('#katilimci').value = (a && a.seri===seriSec()) ? $('#katilimci').value : yeni;
+  kodKaydet($('#katilimci').value);
+  await kodNotGuncelle(); await yenile(); await bataryaCiz();
+});
+$('#katilimci').addEventListener('input', ()=>{
+  const v = $('#katilimci').value;
+  const bu = v.toUpperCase();
+  if(v!==bu){ const p=$('#katilimci').selectionStart; $('#katilimci').value=bu; try{$('#katilimci').setSelectionRange(p,p);}catch(e){} }
+  kodKaydet($('#katilimci').value.trim());
+});
+
 /* ---------- mod ---------- */
 function modAyarla(yeni){
   mod = yeni;
@@ -404,14 +502,14 @@ function modAyarla(yeni){
   const ar = mod==='arastirma';
   $('#setupBaslik').textContent = ar? 'Oturum' : 'Hasta';
   $('#lblKimlik').textContent   = ar? 'Katılımcı kodu' : 'Hasta kodu';
-  $('#katilimci').placeholder   = ar? 'K001' : 'H001';
+  $('#katilimci').placeholder   = ar? 'F001' : 'H001';
   show($('#wrapOturum'), ar);
+  show($('#wrapSeri'), ar);
   show($('#btnMarker'), ar);
   show($('#cardTest'), false); show($('#cardBatarya'), false);
   show($('#cardSonuc'), false); show($('#cardOzet'), false);
   sureyiAyarla();
-  bataryaCiz();
-  yenile();
+  kodBaslat().then(()=>{ bataryaCiz(); yenile(); });
 }
 document.querySelectorAll('.mod').forEach(b=>
   b.addEventListener('click', ()=>modAyarla(b.dataset.mod)));
@@ -717,6 +815,7 @@ $('#btnOzetKapat').addEventListener('click', ()=> show($('#cardOzet'),false));
 /* ---------- liste + dışa aktarma ---------- */
 async function yenile(){
   const hepsi=await dbHepsi();
+  await kodNotGuncelle();
   const kat=$('#katilimci').value.trim(), ot=$('#oturum').value, ks=$('#kosul').value;
   $('#denemeNo').textContent = hepsi.filter(d=>d.katilimci===kat && d.oturum===ot &&
     d.kosul===ks && d.mod==='arastirma').length + 1;
