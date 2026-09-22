@@ -26,7 +26,8 @@
   button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;
     font-family:inherit;background:var(--accent);color:#03212b;margin-top:10px}
   button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
-  .kodsatir{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:stretch}
+  .kodsatir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
+  .kodsatir input{min-width:0}
   button.mini{width:auto;margin-top:0;padding:0 13px;font-size:13px;font-weight:600;white-space:nowrap}
   button.danger{background:#3a1620;color:#fecaca;border:1px solid #63263a}
   button.mor{background:var(--accent2);color:#1b1035}
@@ -78,22 +79,22 @@
 <!-- ============ 1. KİMLİK ============ -->
 <div class="card" id="cardSetup">
   <h2 id="setupBaslik">Oturum</h2>
-  <div class="row">
-    <div><label id="lblKimlik">Katılımcı kodu</label>
-      <div class="kodsatir">
-        <input id="katilimci" placeholder="F001" autocomplete="off" autocapitalize="characters" spellcheck="false">
-        <button type="button" class="sec mini" id="btnYeniKisi">+ Yeni kişi</button>
-      </div>
+  <div><label id="lblKimlik">Katılımcı kodu</label>
+    <div class="kodsatir">
+      <input id="katilimci" placeholder="F001" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button type="button" class="sec mini" id="btnYeniKisi">+ Yeni kişi</button>
     </div>
-    <div id="wrapOturum"><label>Oturum</label><select id="oturum"><option value="1">1. oturum</option><option value="2">2. oturum</option></select></div>
-  </div>
-  <div id="wrapSeri" style="margin-top:10px"><label>Seri</label>
-    <select id="seri">
-      <option value="F">F — ön pilot (teknik deneme, yayımlanmaz)</option>
-      <option value="K">K — asıl çalışma</option>
-    </select>
   </div>
   <div id="kodNot" class="note"></div>
+  <div class="row" style="margin-top:10px">
+    <div id="wrapOturum"><label>Oturum</label><select id="oturum"><option value="1">1. oturum</option><option value="2">2. oturum</option></select></div>
+    <div id="wrapSeri"><label>Seri</label>
+      <select id="seri">
+        <option value="F">F — ön pilot</option>
+        <option value="K">K — asıl çalışma</option>
+      </select>
+    </div>
+  </div>
   <div style="margin-top:10px"><label>Telefonun yerleşimi</label>
     <select id="yerlesim">
       <option value="bel_L3L5">Bel — L3–L5, kemer</option>
