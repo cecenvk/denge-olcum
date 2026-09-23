@@ -121,10 +121,10 @@
   <div id="hurSira" class="sira"></div>
   <div class="row">
     <div><label>Koşul</label><select id="kosul"></select></div>
-    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="37" inputmode="numeric"></div>
+    <div><label>Süre (sn)</label><input id="sure" type="number" min="10" max="180" value="38" inputmode="numeric"></div>
   </div>
   <div id="sureNot" class="note"></div>
-  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>10 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 37 sn kullanın</b> (varsayılan). Kayıt başlayınca <b>2., 3. ve 4. saniyede birer kısa bip</b> duyulur (üç–iki–bir), <b>5. saniyede çift bip</b> — parmağınız Start’ın üzerinde, çift bipte basın. Ritmi dinleyip <i>öngörerek</i> basmak, bipi duyup tepki vermekten ~1,5 sn daha isabetlidir. HUR’un kendi <b>5 sn geri sayımı</b> vardır. Süre, Start’a bipten birkaç saniye <i>erken</i> basıldığı ölçülerek 37 sn’ye ayarlandı; <b>her denemede D’yi kronometreyle ölçün</b> — D ≤ 0 çıkarsa HUR penceresi kaydın dışında kalmıştır ve o deneme tekrarlanmalıdır. Telefona dokunmayın.</div>
+  <div class="note">Deneme no otomatik: <b id="denemeNo">1</b> · Analizde ilk <b>10 sn</b> atılır.<br><b>HUR ile eşzamanlı kayıtta 38 sn kullanın</b> (varsayılan). Kayıt başlayınca <b>2., 3. ve 4. saniyede birer kısa bip</b> duyulur (üç–iki–bir), <b>5. saniyede çift bip</b> — parmağınız Start’ın üzerinde, çift bipte basın. Ritmi dinleyip <i>öngörerek</i> basmak, bipi duyup tepki vermekten ~1,5 sn daha isabetlidir. HUR’un kendi <b>5 sn geri sayımı</b> vardır. Süre, Start’a bipten birkaç saniye <i>erken</i> basıldığı ölçülerek 38 sn’ye ayarlandı; <b>her denemede D’yi kronometreyle ölçün</b> — D ≤ 0 çıkarsa HUR penceresi kaydın dışında kalmıştır ve o deneme tekrarlanmalıdır. Telefona dokunmayın.</div>
   <button id="btnBasla">Ölçüme başla</button>
 </div>
 
@@ -242,13 +242,13 @@ const ATIL_SN = ISARET_SN + HUR_GERI_SAYIM_SN;  // analizde atilan sure (analiz.
 // gec bassa bile HUR'un 30 saniyesinin TAMAMI telefon kaydinin icinde kalir.
 // KULLANICI KARARI (23.09.2026, sahada olculerek): operator Start'a cift bipten
 // ~3 sn ERKEN basiyor, bu yuzden HUR 40. degil ~37. saniyede bitiyor ve 43 sn'lik
-// kayitta telefon HUR'dan 6,5 sn sonra kapaniyordu. Varsayilan 37 sn'ye indirildi;
-// boylece telefon HUR'dan ~1 sn sonra biter. Kullanici gerekirse alandan degistirir.
-// DIKKAT: Start'a TAM bipte basilirsa HUR 40. sn'de biter ve 37 sn YETMEZ. Bu yuzden
+// kayitta telefon HUR'dan 6,5 sn sonra kapaniyordu. Varsayilan 38 sn'ye indirildi
+// (kullanici karari); boylece telefon HUR'dan ~1-2 sn sonra biter, gerekirse alandan
+// degistirilir. DIKKAT: Start'a TAM bipte basilirsa HUR 40. sn'de biter ve 38 sn YETMEZ. Bu yuzden
 // D her denemede kronometreyle olculmeli; D <= 0 cikan deneme cifti tekrarlanmali
 // (onpilot_isle.py atil<0 olan denemeyi zaten atiyor).
-const PAY_SN = -3.0;
-const HUR_TOPLAM_SN = ATIL_SN + 30 + PAY_SN;    // eszamanli kayitta telefon kayit suresi = 37 sn
+const PAY_SN = -2.0;
+const HUR_TOPLAM_SN = ATIL_SN + 30 + PAY_SN;    // eszamanli kayitta telefon kayit suresi = 38 sn
 let buf = null, markerler = [], sonDeneme = null;
 let kayitAktif = false, wakeLock = null, audioCtx = null;
 // Sayfa gizlenirse requestAnimationFrame donar: sayac durur, cift bip GELMEZ ve devicemotion
@@ -446,7 +446,7 @@ function sureNotGuncelle(){
   }else{
     el.className='note bad';
     el.innerHTML=`<b>Çok kısa.</b> Start'a çift bipten ${(-pay).toFixed(0)} sn erken basılması gerekir; `
-      +`bu kadar erken basmak güvenilir değildir. 37–43 sn arası kullanın.`;
+      +`bu kadar erken basmak güvenilir değildir. 38–43 sn arası kullanın.`;
   }
 }
 
