@@ -72,7 +72,7 @@
 <body>
 
 <h1>Denge Ölçüm Kaydedici</h1>
-<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.6</p>
+<p class="sub">Ham ivmeölçer + jiroskop kaydı · araştırma sürümü v2.6.2</p>
 
 <!-- ============ MOD ============ -->
 <div class="modlar">
@@ -103,7 +103,7 @@
   </div>
   <div style="margin-top:10px"><label>Telefonun yerleşimi</label>
     <select id="yerlesim">
-      <option value="bel_L3L5">Bel — L3–L5, kemer</option>
+      <option value="bel_L3L5">Bel — L3–L5, kılıf + deri kemer</option>
       <option value="sternum">Sternum</option>
       <option value="diger">Diğer</option>
     </select>
@@ -1112,7 +1112,11 @@ $('#btnOzetCsv').addEventListener('click', async ()=>{
 
 $('#btnSil').addEventListener('click', async ()=>{
   if(!confirm('TÜM kayıtlar silinecek. CSV indirdiniz mi?')) return;
-  await dbTemizle(); await yenile(); await bataryaCiz();
+  await dbTemizle();
+  /* v2.6.2: hatirlanan kod da sifirlanir -- yoksa temiz baslangicta F001 yerine eski kod (F002...) gelirdi. */
+  try{ ['arastirma','bagimsiz'].forEach(m=>localStorage.removeItem('denge_kod_'+m)); }catch(e){}
+  $('#katilimci').value = kodYap(seriSec(),1); kodKaydet($('#katilimci').value);
+  await kodNotGuncelle(); await yenile(); await bataryaCiz(); await siraCiz();
 });
 
 ['#katilimci','#oturum'].forEach(s=>$(s).addEventListener('change', async()=>{ await yenile(); await bataryaCiz(); await siraCiz(); }));
